@@ -12,10 +12,10 @@ object CalculatePointSetApp {
   val NUMBER_OF_CORES = Runtime.getRuntime().availableProcessors() + 2
   //val NUMBER_OF_CORES = 12
 
-  val VALIDATE_LAST_X_MATCHES_SEQ = Seq(1)
+  val VALIDATE_LAST_X_MATCHES_SEQ = Seq(1, 2, 3)
 
-  val DATA_SOURCE_DIR = "/goalimpacct/data-test"
-  //val DATA_SOURCE_DIR = "/goalimpacct/data_compressed"
+  //val DATA_SOURCE_DIR = "/goalimpacct/data-test"
+  val DATA_SOURCE_DIR = "/goalimpacct/data_compressed"
 
   val OUTPUT_DATA_DIR = "/goalimpacct/spark_data_cache"
 
