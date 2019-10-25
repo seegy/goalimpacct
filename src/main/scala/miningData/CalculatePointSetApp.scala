@@ -12,10 +12,10 @@ object CalculatePointSetApp {
   val NUMBER_OF_CORES = Runtime.getRuntime().availableProcessors() + 2
   //val NUMBER_OF_CORES = 12
 
-  val VALIDATE_LAST_X_MATCHES_SEQ = Seq(1, 2, 3)
+  val VALIDATE_LAST_X_MATCHES_SEQ = Seq(1)
 
-  //val DATA_SOURCE_DIR = "/goalimpacct/data-test"
-  val DATA_SOURCE_DIR = "/goalimpacct/data_compressed"
+  val DATA_SOURCE_DIR = "/goalimpacct/data-test"
+  //val DATA_SOURCE_DIR = "/goalimpacct/data_compressed"
 
   val OUTPUT_DATA_DIR = "/goalimpacct/spark_data_cache"
 
@@ -41,6 +41,10 @@ object CalculatePointSetApp {
     // maybe to edit the offset of league quality, but not yet
     //matches.select(":tournament").distinct().withColumn(":offset", lit(1)).coalesce(1).write.option("header", "true").mode("overwrite").csv("/tmp/tournaments.csv")
 
+    import spark.implicits._
+
+    val profileDF = rawDataBundle("playerProfiles").filter($":birth-date".isNotNull)
+
     val countOfMatches = rawDataBundle("matches").count()
 
     println("calculating players present times...")
@@ -52,6 +56,8 @@ object CalculatePointSetApp {
       spark).cache()
 
     playersPresentTime.write.format("parquet").mode(SaveMode.Overwrite).save(OUTPUT_DATA_DIR + "/player_time_parquet")
+
+
 
     var endDF = VALIDATE_LAST_X_MATCHES_SEQ
       .map(i => (i, calcPointData(spark, i, rawDataBundle, playersPresentTime)))
@@ -67,10 +73,9 @@ object CalculatePointSetApp {
           .withColumnRenamed(":avgRankedDefPointsLastXMatches", ":avgRankedDefPointsLast"+i+"Matches")}
       .reduce{ (df1 : DataFrame, df2 : DataFrame) => df1.join(df2.drop(":saison", ":tournament", ":team") , Seq(":player", ":match", ":target-match-timestamp"))}
 
+
     import org.apache.spark.sql.expressions.Window
     import org.apache.spark.sql.functions._
-    import spark.implicits._
-
 
     val windowSpec = Window.partitionBy(":player",":match").orderBy($":target-match-timestamp".desc)
 
@@ -79,7 +84,15 @@ object CalculatePointSetApp {
       .withColumn(":lastMatch", first(":target-match-timestamp").over(windowSpec))
       .filter($":lastMatch" === $":target-match-timestamp")
       .drop(":lastMatch")
+
+    var compressedEndDFjoinProfile = compressedEndDF.join(profileDF ,endDF(":player") ===  profileDF(":player"))
+
+    var compressedEndDFPlusProfile = compressedEndDFjoinProfile
+      .withColumn("age", ($":target-match-timestamp".cast("long") - $":birth-date".cast("long"))/ (365 * 24 * 60 * 60) )
+      .drop(":birth-date")
       .cache()
+
+    compressedEndDFPlusProfile.show
 
     compressedEndDF.coalesce(1).write
       .mode(SaveMode.Overwrite)

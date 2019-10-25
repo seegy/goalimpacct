@@ -44,12 +44,20 @@ object DataLoadCommons {
       .drop(":out")
       .withColumnRenamed(":outtmp", ":out")
 
+    val playerProfilesRaw = spark.read.option("header", "true").csv(s"$dataSourceDir/player-profile/*.csv")
+    val playerProfiles = TimeCommons.dateToTimestampInDF(playerProfilesRaw, ":birth-date", ":timestamp")
+      .drop(":birth-date")
+      .withColumnRenamed(":timestamp", ":birth-date")
+      .withColumnRenamed(":player-id", ":player")
+
+
     players.cache()
     teams.cache()
     matches.cache()
     cards.cache()
     goals.cache()
     substitution.cache()
+    playerProfiles.cache()
 
     val rawDataBundle = Map(
       ("players", players),
@@ -57,7 +65,9 @@ object DataLoadCommons {
       ("matches", matches),
       ("cards", cards),
       ("goals", goals),
-      ("substitution", substitution))
+      ("substitution", substitution),
+      ("playerProfiles", playerProfiles)
+    )
 
     rawDataBundle
   }
