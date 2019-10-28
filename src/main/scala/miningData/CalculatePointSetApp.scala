@@ -47,6 +47,7 @@ object CalculatePointSetApp{
     val profileDF = rawDataBundle("playerProfiles").filter($":birth-date".isNotNull)
 
     val countOfMatches = rawDataBundle("matches").count()
+    val countOfPlayerProfiles = profileDF.count();
 
     println("calculating players present times...")
 
@@ -56,11 +57,13 @@ object CalculatePointSetApp{
       rawDataBundle("matches"),
       spark).cache()
 
+    println("Storing player present time as parquet...")
+
     playersPresentTime.write.format("parquet").mode(SaveMode.Overwrite).save(OUTPUT_DATA_DIR + "/player_time_parquet")
 
+    println("Start calculating match data...")
 
-
-    var endDF = VALIDATE_LAST_X_MATCHES_SEQ
+    var endDFList = VALIDATE_LAST_X_MATCHES_SEQ
       .map(i => (i, calcPointData(spark, i, rawDataBundle, playersPresentTime)))
       .map{ case (i : Int, df : DataFrame) =>
         df.withColumnRenamed(":playtimeLastXMatches", ":playtimeLast"+i+"Matches")
@@ -72,6 +75,10 @@ object CalculatePointSetApp{
           .withColumnRenamed(":totalRankedDefPointsLastXMatches", ":totalRankedDefPointsLast"+i+"Matches")
           .withColumnRenamed(":avgRankedOffPointsLastXMatches", ":avgRankedOffPointsLast"+i+"Matches")
           .withColumnRenamed(":avgRankedDefPointsLastXMatches", ":avgRankedDefPointsLast"+i+"Matches")}
+
+    println("Compress match data...")
+
+    val endDF = endDFList
       .reduce{ (df1 : DataFrame, df2 : DataFrame) => df1.join(df2.drop(":saison", ":tournament", ":team") , Seq(":player", ":match", ":target-match-timestamp"))}
 
 
@@ -86,18 +93,26 @@ object CalculatePointSetApp{
       .filter($":lastMatch" === $":target-match-timestamp")
       .drop(":lastMatch")
 
+
+    println("Merge data with player profile details...")
+
     val compressedEndDFjoinProfile = compressedEndDF.join(profileDF, endDF(":player") ===  profileDF(":player"))
+      .drop(profileDF(":player"))
 
     val compressedEndDFPlusProfile = compressedEndDFjoinProfile
       .withColumn("age", ($":target-match-timestamp".cast("long") - $":birth-date".cast("long"))/ (365 * 24 * 60 * 60) )
       .drop(":birth-date")
       .cache()
 
+    println("Storing data as csv...")
+
     compressedEndDFPlusProfile.coalesce(1).write
       .mode(SaveMode.Overwrite)
       .option("mapreduce.fileoutputcommitter.marksuccessfuljobs","false") //Avoid creating of crc files
       .option("header","true")
       .csv(OUTPUT_DATA_DIR + "/result_csv")
+
+    println("Storing data as parquet...")
 
     compressedEndDFPlusProfile.write
       .format("parquet")
@@ -106,12 +121,12 @@ object CalculatePointSetApp{
 
 
     println(s"Calculated data of matches:  $countOfMatches")
+    println(s"Calculated data of player profiles:  $countOfPlayerProfiles")
 
     val endMillis = System.currentTimeMillis()
     val runtime =  Duration.ofMillis(endMillis - startMillis).toMinutes
 
     println(s"Calculating tooks $runtime minutes")
-
 
 
     //scala.io.StdIn.readLine()
