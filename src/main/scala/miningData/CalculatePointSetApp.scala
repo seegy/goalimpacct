@@ -7,12 +7,12 @@ import miningData.libs.{DataLoadCommons, NeutralPointsCalculator, RankedPointCal
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 
-object CalculatePointSetApp {
+object CalculatePointSetApp{
 
-  val NUMBER_OF_CORES = Runtime.getRuntime().availableProcessors() + 2
+  val NUMBER_OF_CORES = Runtime.getRuntime().availableProcessors()
   //val NUMBER_OF_CORES = 12
 
-  val VALIDATE_LAST_X_MATCHES_SEQ = Seq(1, 2, 3)
+  val VALIDATE_LAST_X_MATCHES_SEQ = Seq(1, 2, 3, 5)
 
   //val DATA_SOURCE_DIR = "/goalimpacct/data-test"
   val DATA_SOURCE_DIR = "/goalimpacct/data_compressed"
@@ -27,7 +27,8 @@ object CalculatePointSetApp {
     val conf = new SparkConf()
     conf.setMaster(s"local[$NUMBER_OF_CORES]")
     conf.setAppName(this.getClass.getName)
-    conf.set("spark.driver.memory", "16g")
+    conf.set("spark.driver.memory", "8g")
+    conf.set("spark.executor.memory", "8g")
     val sc = new SparkContext(conf)
     sc.setLogLevel("ERROR")
 
@@ -85,14 +86,12 @@ object CalculatePointSetApp {
       .filter($":lastMatch" === $":target-match-timestamp")
       .drop(":lastMatch")
 
-    var compressedEndDFjoinProfile = compressedEndDF.join(profileDF ,endDF(":player") ===  profileDF(":player"))
+    val compressedEndDFjoinProfile = compressedEndDF.join(profileDF ,endDF(":player") ===  profileDF(":player"))
 
-    var compressedEndDFPlusProfile = compressedEndDFjoinProfile
+    val compressedEndDFPlusProfile = compressedEndDFjoinProfile
       .withColumn("age", ($":target-match-timestamp".cast("long") - $":birth-date".cast("long"))/ (365 * 24 * 60 * 60) )
       .drop(":birth-date")
       .cache()
-
-    compressedEndDFPlusProfile.show
 
     compressedEndDF.coalesce(1).write
       .mode(SaveMode.Overwrite)
@@ -113,7 +112,12 @@ object CalculatePointSetApp {
 
     println(s"Calculating tooks $runtime minutes")
 
+
+
     //scala.io.StdIn.readLine()
+
+    spark.close()
+
   }
 
   def calcPointData(spark: SparkSession, validationTakeLastXMatches: Int, rawDataBundle : Map[String, DataFrame], playersPresentTime: DataFrame) :  DataFrame = {
