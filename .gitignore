@@ -204,3 +204,4 @@ spark-warehouse/
 
 
 # End of https://www.gitignore.io/api/spark,intellij,jupyternotebooks
+/project
