@@ -7,4 +7,10 @@ scalaVersion := "2.11.8"
 libraryDependencies += "org.apache.spark" %% "spark-core" % "2.4.0"
 libraryDependencies += "org.apache.spark" %% "spark-sql" % "2.4.0"
 
-fork in run := true
+// fork in run := true
+
+mainClass in (Compile, run) := Some("miningData.CalculatePointSetApp")
+
+run / javaOptions += "-Xms4G -Xmx16G"
+
+
