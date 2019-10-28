@@ -88,6 +88,7 @@ object NeutralPointsCalculator {
     playersPerMatchWithTime
       .join(offPointsPerMatch, Seq(":player", ":match"))
       .join(defPointsPerMatch, Seq(":player", ":match"))
+      .withColumn(":diffPoints", offPointsPerMatch(":offPoints") - defPointsPerMatch(":defPoints"))
       .drop(":in-time", ":out-time")
 
   }
@@ -101,7 +102,7 @@ object NeutralPointsCalculator {
       .select(":player", ":match", ":team", ":tournament", ":saison", ":date")
       .withColumnRenamed(":date", ":target-match-timestamp")
       .join(
-        allPoints.select(":player", ":saison", ":date", ":playtime", ":offPoints", ":defPoints"),
+        allPoints.select(":player", ":saison", ":date", ":playtime", ":offPoints", ":defPoints", ":diffPoints"),
         Seq(":player", ":saison"))
       .filter($":target-match-timestamp" >= $":date")
 
@@ -113,14 +114,16 @@ object NeutralPointsCalculator {
 
     val aggPoints = lastXMatches
       .groupBy(":player", ":saison", ":match", ":team", ":tournament", ":target-match-timestamp")
-      .sum(":playtime", ":offPoints", ":defPoints")
+      .sum(":playtime", ":offPoints", ":defPoints", ":diffPoints")
       .withColumnRenamed("sum(:playtime)", ":playtimeLastXMatches")
       .withColumnRenamed("sum(:offPoints)", ":totalOffPointsLastXMatches")
       .withColumnRenamed("sum(:defPoints)", ":totalDefPointsLastXMatches")
+      .withColumnRenamed("sum(:diffPoints)", ":totalDiffPointsLastXMatches")
 
     val avgPoints = aggPoints
       .withColumn(":avgOffPointsLastXMatches", $":totalOffPointsLastXMatches" / $":playtimeLastXMatches")
       .withColumn(":avgDefPointsLastXMatches", $":totalDefPointsLastXMatches" / $":playtimeLastXMatches")
+      .withColumn(":avgDiffPointsLastXMatches", $":totalDiffPointsLastXMatches" / $":playtimeLastXMatches")
 
     avgPoints
   }

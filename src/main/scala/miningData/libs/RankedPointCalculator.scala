@@ -132,6 +132,7 @@ object RankedPointCalculator {
         Seq(":player", ":match"))
       .join(rankedDefPointsPerMatch.select(":player",  ":match", ":rankedDefPoints").cache,
         Seq(":player", ":match"))
+      .withColumn(":rankedDiffPoints", rankedOffPointsPerMatch(":rankedOffPoints") - rankedDefPointsPerMatch(":rankedDefPoints"))
   }
 
   private[this] def aggregateLastXMatches(allPoints : DataFrame, validationTakeLastXMatches : Int, spark: SparkSession) : DataFrame = {
@@ -142,7 +143,7 @@ object RankedPointCalculator {
       .select(":player", ":match", ":team", ":tournament", ":saison", ":date")
       .withColumnRenamed(":date", ":target-match-timestamp")
       .join(
-        allPoints.select(":player", ":saison", ":date", ":playtime", ":rankedOffPoints", ":rankedDefPoints"),
+        allPoints.select(":player", ":saison", ":date", ":playtime", ":rankedOffPoints", ":rankedDefPoints", ":rankedDiffPoints"),
         Seq(":player", ":saison"))
       .filter($":target-match-timestamp" >= $":date")
 
@@ -154,14 +155,16 @@ object RankedPointCalculator {
 
     val aggPoints = lastXMatches
       .groupBy(":player", ":saison", ":match", ":team", ":tournament", ":target-match-timestamp")
-      .sum(":playtime", ":rankedOffPoints", ":rankedDefPoints")
+      .sum(":playtime", ":rankedOffPoints", ":rankedDefPoints", ":rankedDiffPoints")
       .withColumnRenamed("sum(:playtime)", ":playtimeLastXMatches")
       .withColumnRenamed("sum(:rankedOffPoints)", ":totalRankedOffPointsLastXMatches")
       .withColumnRenamed("sum(:rankedDefPoints)", ":totalRankedDefPointsLastXMatches")
+      .withColumnRenamed("sum(:rankedDiffPoints)", ":totalRankedDiffPointsLastXMatches")
 
     val avgPoints = aggPoints
       .withColumn(":avgRankedOffPointsLastXMatches", $":totalRankedOffPointsLastXMatches" / $":playtimeLastXMatches")
       .withColumn(":avgRankedDefPointsLastXMatches", $":totalRankedDefPointsLastXMatches" / $":playtimeLastXMatches")
+      .withColumn(":avgRankedDiffPointsLastXMatches", $":totalRankedDiffPointsLastXMatches" / $":playtimeLastXMatches")
 
     avgPoints
   }

@@ -74,7 +74,11 @@ object CalculatePointSetApp{
           .withColumnRenamed(":totalRankedOffPointsLastXMatches", ":totalRankedOffPointsLast"+i+"Matches")
           .withColumnRenamed(":totalRankedDefPointsLastXMatches", ":totalRankedDefPointsLast"+i+"Matches")
           .withColumnRenamed(":avgRankedOffPointsLastXMatches", ":avgRankedOffPointsLast"+i+"Matches")
-          .withColumnRenamed(":avgRankedDefPointsLastXMatches", ":avgRankedDefPointsLast"+i+"Matches")}
+          .withColumnRenamed(":avgRankedDefPointsLastXMatches", ":avgRankedDefPointsLast"+i+"Matches")
+          .withColumnRenamed(":totalDiffPointsLastXMatches", ":totalDiffPointsLast"+i+"Matches")
+          .withColumnRenamed(":avgDiffPointsLastXMatches", ":avgDiffPointsLast"+i+"Matches")
+          .withColumnRenamed(":totalRankedDiffPointsLastXMatches", ":totalRankedDiffPointsLast"+i+"Matches")
+          .withColumnRenamed(":avgRankedDiffPointsLastXMatches", ":avgRankedDiffPointsLast"+i+"Matches")}
 
     println("Compress match data...")
 
