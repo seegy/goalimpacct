@@ -86,20 +86,20 @@ object CalculatePointSetApp{
       .filter($":lastMatch" === $":target-match-timestamp")
       .drop(":lastMatch")
 
-    val compressedEndDFjoinProfile = compressedEndDF.join(profileDF ,endDF(":player") ===  profileDF(":player"))
+    val compressedEndDFjoinProfile = compressedEndDF.join(profileDF, endDF(":player") ===  profileDF(":player"))
 
     val compressedEndDFPlusProfile = compressedEndDFjoinProfile
       .withColumn("age", ($":target-match-timestamp".cast("long") - $":birth-date".cast("long"))/ (365 * 24 * 60 * 60) )
       .drop(":birth-date")
       .cache()
 
-    compressedEndDF.coalesce(1).write
+    compressedEndDFPlusProfile.coalesce(1).write
       .mode(SaveMode.Overwrite)
       .option("mapreduce.fileoutputcommitter.marksuccessfuljobs","false") //Avoid creating of crc files
       .option("header","true")
       .csv(OUTPUT_DATA_DIR + "/result_csv")
 
-    compressedEndDF.write
+    compressedEndDFPlusProfile.write
       .format("parquet")
       .mode(SaveMode.Overwrite)
       .save(OUTPUT_DATA_DIR + "/result_parquet")
