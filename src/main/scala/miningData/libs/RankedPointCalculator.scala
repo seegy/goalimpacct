@@ -132,7 +132,7 @@ object RankedPointCalculator {
         Seq(":player", ":match"))
       .join(rankedDefPointsPerMatch.select(":player",  ":match", ":rankedDefPoints").cache,
         Seq(":player", ":match"))
-      .withColumn(":rankedDiffPoints", rankedOffPointsPerMatch(":rankedOffPoints") - rankedDefPointsPerMatch(":rankedDefPoints"))
+      .withColumn(":rankedDiffPoints", rankedOffPointsPerMatch(":rankedOffPoints") + rankedDefPointsPerMatch(":rankedDefPoints"))
   }
 
   private[this] def aggregateLastXMatches(allPoints : DataFrame, validationTakeLastXMatches : Int, spark: SparkSession) : DataFrame = {

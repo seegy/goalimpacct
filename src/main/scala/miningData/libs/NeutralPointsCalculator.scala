@@ -88,7 +88,7 @@ object NeutralPointsCalculator {
     playersPerMatchWithTime
       .join(offPointsPerMatch, Seq(":player", ":match"))
       .join(defPointsPerMatch, Seq(":player", ":match"))
-      .withColumn(":diffPoints", offPointsPerMatch(":offPoints") - defPointsPerMatch(":defPoints"))
+      .withColumn(":diffPoints", offPointsPerMatch(":offPoints") + defPointsPerMatch(":defPoints"))
       .drop(":in-time", ":out-time")
 
   }
