@@ -3,9 +3,44 @@ package miningData.libs
 
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.types.IntegerType
+import java.util.Properties;
 
 object DataLoadCommons {
 
+  def loadRawDataFormTable(spark : SparkSession, url : String, user :String, password : String, numberOfPartitions : Int): Map[String, DataFrame] = {
+
+    val connectionProperties = new Properties()
+    connectionProperties.put("user", user)
+    connectionProperties.put("password", password)
+
+    val matchDF = spark.read.jdbc(url,  "match", connectionProperties)
+    val playerDF = spark.read.jdbc(url,  "player", connectionProperties)
+    val teamDF = spark.read.jdbc(url,  "team", connectionProperties)
+    val cardDF = spark.read.jdbc(url,  "card", connectionProperties)
+    val goalDF = spark.read.jdbc(url,  "goal", connectionProperties)
+    val substitutionDF = spark.read.jdbc(url,  "substitution", connectionProperties)
+    val profileDF = spark.read.jdbc(url,  "profile", connectionProperties)
+
+    playerDF.cache()
+    teamDF.cache()
+    matchDF.cache()
+    cardDF.cache()
+    goalDF.cache()
+    substitutionDF.cache()
+    profileDF.cache()
+
+    val rawDataBundle = Map(
+      ("players", playerDF),
+      ("teams", teamDF),
+      ("matches", matchDF),
+      ("cards", cardDF),
+      ("goals", goalDF),
+      ("substitution", substitutionDF),
+      ("playerProfiles", profileDF)
+    )
+
+    rawDataBundle
+  }
 
 
   def loadRawData(spark : SparkSession, dataSourceDir : String, numberOfPartitions : Int): Map[String, DataFrame] = {

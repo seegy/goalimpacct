@@ -7,7 +7,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 object RankedPointCalculator {
 
 
-  def getRankedPoints(spark: SparkSession, validationTakeLastXMatches: Int, neutralPointsMatches: DataFrame, playersWithTimeDF: DataFrame, goalDF: DataFrame, matchDF: DataFrame): DataFrame = {
+  def getRankedPoints(spark: SparkSession, validationTakeLastXMatches: Int, matchDF: DataFrame, neutralPointsMatches: DataFrame, playersWithTimeDF: DataFrame, goalDF: DataFrame): DataFrame = {
 
     val rankedOffPointsPerMatch: DataFrame =  getRankedOffensivePresentPointsPerMatch(neutralPointsMatches, playersWithTimeDF, goalDF, matchDF, spark)
     val rankedDefPointsPerMatch: DataFrame = getRankedDefensivePresentPointsPerMatch(neutralPointsMatches, playersWithTimeDF, goalDF, matchDF, spark)

@@ -6,6 +6,8 @@ import java.time.Duration
 import miningData.libs.{DataLoadCommons, NeutralPointsCalculator, RankedPointCalculator, TimeCommons}
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.functions._
+
 
 object CalculatePointSetApp{
 
@@ -14,8 +16,6 @@ object CalculatePointSetApp{
 
   val VALIDATE_LAST_X_MATCHES_SEQ = Seq(1, 2, 3, 5)
 
-  //val DATA_SOURCE_DIR = "/goalimpacct/data-test"
-  val DATA_SOURCE_DIR = "/goalimpacct/data_compressed"
 
   val OUTPUT_DATA_DIR = "/goalimpacct/spark_data_cache"
 
@@ -37,14 +37,16 @@ object CalculatePointSetApp{
 
     println("loading raw data...")
 
-    val rawDataBundle = DataLoadCommons.loadRawData(spark, DATA_SOURCE_DIR, numberOfPartitions)
+    val user = "postgres"
+    val password = "postgres"
+    val url = "jdbc:postgresql://localhost:5432/goalimpacct"
 
-    // maybe to edit the offset of league quality, but not yet
-    //matches.select(":tournament").distinct().withColumn(":offset", lit(1)).coalesce(1).write.option("header", "true").mode("overwrite").csv("/tmp/tournaments.csv")
+    val rawDataBundle = DataLoadCommons.loadRawDataFormTable(spark, url, user, password, numberOfPartitions)
 
     import spark.implicits._
 
-    val profileDF = rawDataBundle("playerProfiles").filter($":birth-date".isNotNull)
+    val profileDF = rawDataBundle("playerProfiles").filter($"birthdate".isNotNull)
+
 
     val countOfMatches = rawDataBundle("matches").count()
     val countOfPlayerProfiles = profileDF.count();
@@ -57,72 +59,78 @@ object CalculatePointSetApp{
       rawDataBundle("matches"),
       spark).cache()
 
-    println("Storing player present time as parquet...")
+    println("Storing player present time ...")
 
-    playersPresentTime.write.format("parquet").mode(SaveMode.Overwrite).save(OUTPUT_DATA_DIR + "/player_time_parquet")
+
+    playersPresentTime.write.
+      format("jdbc")
+      .mode(SaveMode.Overwrite)
+      .option("url", url)
+      .option("dbtable", "playertime")
+      .option("user", user)
+      .option("password", password)
+      .save()
 
     println("Start calculating match data...")
 
     var endDFList = VALIDATE_LAST_X_MATCHES_SEQ
       .map(i => (i, calcPointData(spark, i, rawDataBundle, playersPresentTime)))
       .map{ case (i : Int, df : DataFrame) =>
-        df.withColumnRenamed(":playtimeLastXMatches", ":playtimeLast"+i+"Matches")
-          .withColumnRenamed(":totalOffPointsLastXMatches", ":totalOffPointsLast"+i+"Matches")
-          .withColumnRenamed(":totalDefPointsLastXMatches", ":totalDefPointsLast"+i+"Matches")
-          .withColumnRenamed(":avgOffPointsLastXMatches", ":avgOffPointsLast"+i+"Matches")
-          .withColumnRenamed(":avgDefPointsLastXMatches", ":avgDefPointsLast"+i+"Matches")
-          .withColumnRenamed(":totalRankedOffPointsLastXMatches", ":totalRankedOffPointsLast"+i+"Matches")
-          .withColumnRenamed(":totalRankedDefPointsLastXMatches", ":totalRankedDefPointsLast"+i+"Matches")
-          .withColumnRenamed(":avgRankedOffPointsLastXMatches", ":avgRankedOffPointsLast"+i+"Matches")
-          .withColumnRenamed(":avgRankedDefPointsLastXMatches", ":avgRankedDefPointsLast"+i+"Matches")
-          .withColumnRenamed(":totalDiffPointsLastXMatches", ":totalDiffPointsLast"+i+"Matches")
-          .withColumnRenamed(":avgDiffPointsLastXMatches", ":avgDiffPointsLast"+i+"Matches")
-          .withColumnRenamed(":totalRankedDiffPointsLastXMatches", ":totalRankedDiffPointsLast"+i+"Matches")
-          .withColumnRenamed(":avgRankedDiffPointsLastXMatches", ":avgRankedDiffPointsLast"+i+"Matches")}
+        df.withColumnRenamed("playtimeLastXMatches", "playtimeLast"+i+"Matches")
+          .withColumnRenamed("totalOffPointsLastXMatches", "totalOffPointsLast"+i+"Matches")
+          .withColumnRenamed("totalDefPointsLastXMatches", "totalDefPointsLast"+i+"Matches")
+          .withColumnRenamed("avgOffPointsLastXMatches", "avgOffPointsLast"+i+"Matches")
+          .withColumnRenamed("avgDefPointsLastXMatches", "avgDefPointsLast"+i+"Matches")
+          //.withColumnRenamed(":totalRankedOffPointsLastXMatches", ":totalRankedOffPointsLast"+i+"Matches")
+          //.withColumnRenamed(":totalRankedDefPointsLastXMatches", ":totalRankedDefPointsLast"+i+"Matches")
+          //.withColumnRenamed(":avgRankedOffPointsLastXMatches", ":avgRankedOffPointsLast"+i+"Matches")
+          //.withColumnRenamed(":avgRankedDefPointsLastXMatches", ":avgRankedDefPointsLast"+i+"Matches")
+          .withColumnRenamed("totalDiffPointsLastXMatches", "totalDiffPointsLast"+i+"Matches")
+          .withColumnRenamed("avgDiffPointsLastXMatches", "avgDiffPointsLast"+i+"Matches")
+          //.withColumnRenamed(":totalRankedDiffPointsLastXMatches", ":totalRankedDiffPointsLast"+i+"Matches")
+          //.withColumnRenamed(":avgRankedDiffPointsLastXMatches", ":avgRankedDiffPointsLast"+i+"Matches")
+      }
 
     println("Compress match data...")
 
     val endDF = endDFList
-      .reduce{ (df1 : DataFrame, df2 : DataFrame) => df1.join(df2.drop(":saison", ":tournament", ":team") , Seq(":player", ":match", ":target-match-timestamp"))}
+      .reduce{ (df1 : DataFrame, df2 : DataFrame) => df1.join(df2.drop("saison", "tournament", "teamid") , Seq("playerid", "matchid", "target-match-timestamp"))}
 
 
     import org.apache.spark.sql.expressions.Window
     import org.apache.spark.sql.functions._
 
-    val windowSpec = Window.partitionBy(":player",":match").orderBy($":target-match-timestamp".desc)
+    val windowSpec = Window.partitionBy("playerid","matchid").orderBy($"target-match-timestamp".desc)
 
 
     val compressedEndDF = endDF
-      .withColumn(":lastMatch", first(":target-match-timestamp").over(windowSpec))
-      .filter($":lastMatch" === $":target-match-timestamp")
-      .drop(":lastMatch")
-
+      .withColumn("lastMatch", first("target-match-timestamp").over(windowSpec))
+      .filter($"lastMatch" === $"target-match-timestamp")
+      .drop("lastMatch")
 
     println("Merge data with player profile details...")
 
-    val compressedEndDFjoinProfile = compressedEndDF.join(profileDF, endDF(":player") ===  profileDF(":player"))
-      .drop(profileDF(":player"))
+    val compressedEndDFjoinProfile = compressedEndDF.join(
+      profileDF.select("playerid", "birthdate"),
+      endDF("playerid") ===  profileDF("playerid"),
+      "left")
+      .drop(profileDF("playerid"))
 
     val compressedEndDFPlusProfile = compressedEndDFjoinProfile
-      .withColumn("age", ($":target-match-timestamp".cast("long") - $":birth-date".cast("long"))/ (365 * 24 * 60 * 60) )
-      .drop(":birth-date")
-      .cache()
+      .withColumn("age", datediff( $"target-match-timestamp", $"birthdate") / 365 )
+      .drop("birthdate")
 
-    println("Storing data as csv...")
 
-    compressedEndDFPlusProfile.coalesce(1).write
+    println("Storing score data ...")
+
+    compressedEndDFPlusProfile.write.
+      format("jdbc")
       .mode(SaveMode.Overwrite)
-      .option("mapreduce.fileoutputcommitter.marksuccessfuljobs","false") //Avoid creating of crc files
-      .option("header","true")
-      .csv(OUTPUT_DATA_DIR + "/result_csv")
-
-    println("Storing data as parquet...")
-
-    compressedEndDFPlusProfile.write
-      .format("parquet")
-      .mode(SaveMode.Overwrite)
-      .save(OUTPUT_DATA_DIR + "/result_parquet")
-
+      .option("url", url)
+      .option("dbtable", "scores")
+      .option("user", user)
+      .option("password", password)
+      .save()
 
     println(s"Calculated data of matches:  $countOfMatches")
     println(s"Calculated data of player profiles:  $countOfPlayerProfiles")
@@ -146,10 +154,10 @@ object CalculatePointSetApp{
     val matches : DataFrame  = rawDataBundle("matches")
     val goals : DataFrame  = rawDataBundle("goals")
 
-    val allNeutralPointsLastXMatches = NeutralPointsCalculator.getNeutralPoints(spark, validationTakeLastXMatches, playersPresentTime, goals).cache()
-    val allRankedPointsLastXMatches = RankedPointCalculator.getRankedPoints(spark, validationTakeLastXMatches, allNeutralPointsLastXMatches, playersPresentTime, goals, matches).cache()
+    val allNeutralPointsLastXMatches = NeutralPointsCalculator.getNeutralPoints(spark, validationTakeLastXMatches, matches, playersPresentTime, goals).cache()
+    //val allRankedPointsLastXMatches = RankedPointCalculator.getRankedPoints(spark, validationTakeLastXMatches, matches, allNeutralPointsLastXMatches, playersPresentTime, goals).cache()
 
-    allRankedPointsLastXMatches
+    allNeutralPointsLastXMatches
   }
 
 

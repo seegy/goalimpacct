@@ -55,8 +55,8 @@ object SimpleCalculationApp {
 
     println(s"calculating data for the last $VALIDATE_LAST_X_MATCHES matches...")
 
-    val allNeutralPointsLastXMatches = NeutralPointsCalculator.getNeutralPoints(spark, VALIDATE_LAST_X_MATCHES, playersPresentTime, goals).cache()
-    val allRankedPointsLastXMatches = RankedPointCalculator.getRankedPoints(spark, VALIDATE_LAST_X_MATCHES, allNeutralPointsLastXMatches, playersPresentTime, goals, matches).cache()
+    val allNeutralPointsLastXMatches = NeutralPointsCalculator.getNeutralPoints(spark, VALIDATE_LAST_X_MATCHES, matches, playersPresentTime, goals).cache()
+    val allRankedPointsLastXMatches = RankedPointCalculator.getRankedPoints(spark, VALIDATE_LAST_X_MATCHES, matches, allNeutralPointsLastXMatches, playersPresentTime, goals).cache()
 
 
     allRankedPointsLastXMatches.show()

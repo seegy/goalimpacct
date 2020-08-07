@@ -13,57 +13,60 @@ object TimeCommons {
     import spark.implicits._
 
     // bring in substitution players
-    val substitutionInPlayers = substitutionDF.drop(substitutionDF.col(":out"))
-      .withColumnRenamed(":in", ":player")
-      .withColumnRenamed(":time", ":in-time")
+    val substitutionInPlayers = substitutionDF.drop(substitutionDF.col("playerout"))
+      .withColumnRenamed("playerin", "playerid")
+      .withColumnRenamed("time", "in-time")
 
     // set in time of startup players an default value 0
-    val startupPlayers = playerDF.withColumn(":in-time", typedLit(0))
+    val startupPlayers = playerDF.withColumn("in-time", typedLit(0))
 
     // merge startup and substition players
-    val allPlayers = startupPlayers.select($":team", $":player", $":match", $":in-time")
-      .union(substitutionInPlayers.select($":team", $":player", $":match", $":in-time"))
+    val allPlayers = startupPlayers.select($"teamid", $"playerid", $"matchid", $"in-time")
+      .union(substitutionInPlayers.select($"teamid", $"playerid", $"matchid", $"in-time"))
 
 
-    val preparedSubstitutions = substitutionDF.withColumnRenamed(":out", ":player")
-      .withColumnRenamed(":time", ":out-time")
-      .drop(":in")
+    val preparedSubstitutions = substitutionDF.withColumnRenamed("playerout", "playerid")
+      .withColumnRenamed("time", "out-time")
+      .drop("playerin")
 
     // join players and substitutions for out-times
     val playersJoinedSubs = allPlayers
-      .join(preparedSubstitutions, Seq(":player", ":match", ":team"), "left_outer")
+      .join(preparedSubstitutions, Seq("playerid", "matchid", "teamid"), "left_outer")
 
     playersJoinedSubs.cache()
 
-    val playerAndMatch = playersJoinedSubs.join(matchesDF, ":match")
+    val playerAndMatch = playersJoinedSubs.join(matchesDF, "matchid")
 
     // players that are not substituted
-    val filtered90Players = playerAndMatch.filter(playerAndMatch.col(":out-time").isNull)
-      .drop(":out-time")
-      .withColumn(":out-time", playerAndMatch.col(":match-length"))
-      .drop(":home")
-      .drop(":guest")
-      .drop(":match-length").distinct()
+    val filtered90Players = playerAndMatch.filter(playerAndMatch.col("out-time").isNull)
+      .drop("out-time")
+      .withColumn("out-time", playerAndMatch.col("matchlength"))
+      .drop("hometeam")
+      .drop("guestteam")
+      .drop("matchlength")
+      .drop("country")
+      .drop("matchtime")
+      .drop("refereeid").distinct()
+
 
     // out because of red card?
-    val redCards = cardDF.filter(cardDF.col(":color") === ":red")
-    val filtered90PlayersJoinedCard = filtered90Players.join(redCards, Seq(":player", ":match", ":team"), "left_outer")
+    val redCards = cardDF.filter(cardDF.col("color") === "red" or cardDF.col("color") === "yellowred")
+    val filtered90PlayersJoinedCard = filtered90Players.join(redCards, Seq("playerid", "matchid", "teamid"), "left_outer")
     filtered90PlayersJoinedCard.cache()
 
-
     // players that are not substituted and get a red card
-    val filtered90PlayersWithCards = filtered90PlayersJoinedCard.filter(filtered90PlayersJoinedCard.col(":color").isNotNull)
-      .drop(":out-time")
-      .withColumnRenamed(":time", ":out-time")
-      .select(":player", ":match", ":team", ":tournament", ":saison", ":date", ":in-time", ":out-time")
+    val filtered90PlayersWithCards = filtered90PlayersJoinedCard.filter(filtered90PlayersJoinedCard.col("color").isNotNull)
+      .drop("out-time")
+      .withColumnRenamed("time", "out-time")
+      .select("playerid", "matchid", "teamid", "in-time", "out-time")
 
     // players without substitution and red card
-    val filtered90PlayersWithoutCards = filtered90PlayersJoinedCard.filter(filtered90PlayersJoinedCard.col(":color").isNull)
-      .select(":player", ":match", ":team", ":tournament", ":saison", ":date", ":in-time", ":out-time")
+    val filtered90PlayersWithoutCards = filtered90PlayersJoinedCard.filter(filtered90PlayersJoinedCard.col("color").isNull)
+      .select("playerid", "matchid", "teamid", "in-time", "out-time")
 
     // players with substitution
-    val filteredNot90Players = playerAndMatch.filter(playerAndMatch.col(":out-time").isNotNull)
-      .select(":player", ":match", ":team", ":tournament", ":saison", ":date", ":in-time", ":out-time")
+    val filteredNot90Players = playerAndMatch.filter(playerAndMatch.col("out-time").isNotNull)
+      .select("playerid", "matchid", "teamid", "in-time", "out-time")
 
     // merge everything
     val allPlayersInOutTime = filteredNot90Players
@@ -72,7 +75,7 @@ object TimeCommons {
 
     import org.apache.spark.sql.functions._
 
-    val withPlaytime = allPlayersInOutTime.withColumn(":playtime", when($":out-time" =!= $":in-time", $":out-time" - $":in-time").otherwise(lit(1)))
+    val withPlaytime = allPlayersInOutTime.withColumn("playtime", when($"out-time" =!= $"in-time", $"out-time" - $"in-time").otherwise(lit(1)))
 
     withPlaytime
   }
